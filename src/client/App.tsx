@@ -9,7 +9,10 @@ import {
   InvestigationAction,
   LeaderboardResponse,
   ArchiveCase,
-  LauncherCaseMetadata
+  LauncherCaseMetadata,
+  CaseSubmission,
+  CustomCaseData,
+  CommunityCaseMetadata
 } from '../shared/types';
 import PhaserGame from './game/PhaserGame';
 import Sidebar from './components/Sidebar';
@@ -18,7 +21,12 @@ import ForensicsLab from './components/ForensicsLab';
 import ProfilePanel from './components/ProfilePanel';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import ArchivesPanel from './components/ArchivesPanel';
+import FilingCabinet from './components/FilingCabinet';
+import CaseEditor from './components/CaseEditor';
+import ModeratorReview from './components/ModeratorReview';
 import { executeMockRequest } from './utils/mockServer';
+// @ts-ignore
+import { getWebViewMode, addWebViewModeListener, removeWebViewModeListener, requestExpandedMode } from '@devvit/client';
 
 const pendingRequests = new Map<
   string,
@@ -69,21 +77,92 @@ async function sendToHost<T>(type: string, payload?: any): Promise<T> {
   return json as T;
 }
 
+export function relayLog(msg: string) {
+  console.log(msg);
+  fetch('/api/log', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message: msg })
+  }).catch(() => {});
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('office');
   const [activeDate] = useState(() => new Date().toISOString().split('T')[0]);
 
+  const [viewMode, setViewMode] = useState<'inline' | 'expanded'>(() => {
+    try {
+      const mode = getWebViewMode();
+      // Default to expanded for local mock mode
+      const isMockMode = typeof window !== 'undefined' && window.parent === window;
+      if (isMockMode) return 'expanded';
+      return mode || 'inline';
+    } catch (e) {
+      return 'expanded';
+    }
+  });
+
+  const [postType, setPostType] = useState<'HEADQUARTERS' | 'DAILY_CASE' | 'COMMUNITY_CASE'>('DAILY_CASE');
+
+  useEffect(() => {
+    try {
+      const handleModeChange = (newMode: 'inline' | 'expanded') => {
+        setViewMode(newMode);
+      };
+      addWebViewModeListener(handleModeChange);
+      return () => {
+        removeWebViewModeListener(handleModeChange);
+      };
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   // Launcher state
   const [isLauncher, setIsLauncher] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
-  const [hqTab, setHqTab] = useState<'menu' | 'archives' | 'profile' | 'leaderboard' | 'settings'>('menu');
+  const [hqTab, setHqTab] = useState<'menu' | 'archives' | 'profile' | 'leaderboard' | 'settings' | 'submit_case' | 'community_files' | 'moderation'>('menu');
+
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (viewMode !== 'inline') return;
+    const btn = expandButtonRef.current;
+    if (!btn) return;
+
+    const handleNativeClick = (e: MouseEvent) => {
+      relayLog('ENTER HQ CLICK');
+      try {
+        requestExpandedMode(e, 'game');
+      } catch (err) {
+        console.error('Failed to request expanded mode:', err);
+      }
+    };
+
+    btn.addEventListener('click', handleNativeClick);
+    return () => {
+      btn.removeEventListener('click', handleNativeClick);
+    };
+  }, [viewMode, isLauncher, loading]);
 
   // Multi-post metadata
   const [todayCase, setTodayCase] = useState<LauncherCaseMetadata | null>(null);
   const [yesterdayCase, setYesterdayCase] = useState<LauncherCaseMetadata | null>(null);
   const [currentInvestigation, setCurrentInvestigation] = useState<LauncherCaseMetadata | null>(null);
   const [detailedArchives, setDetailedArchives] = useState<(ArchiveCase & LauncherCaseMetadata & { difficulty: number; solveCount: number })[]>([]);
+
+  // Community Cases & submissions
+  const [communityCases, setCommunityCases] = useState<CommunityCaseMetadata[]>([]);
+  const [pendingSubmissions, setPendingSubmissions] = useState<CaseSubmission[]>([]);
+  const [isMockMod, setIsMockMod] = useState(true);
+  const [submittingCase, setSubmittingCase] = useState(false);
+  const [loadingCommunityCases, setLoadingCommunityCases] = useState(false);
+  const [loadingPendingSubmissions, setLoadingPendingSubmissions] = useState(false);
+  const [userRating, setUserRating] = useState<number | null>(null);
+
+  // Category Selection state
+  const [selectedCategory, setSelectedCategory] = useState<'culprit' | 'motive' | 'method' | 'twist'>('culprit');
 
   // Daily Case Game states
   const [mystery, setMystery] = useState<MysteryClient | null>(null);
@@ -153,8 +232,97 @@ export default function App() {
       loadLeaderboard();
     } else if (hqTab === 'settings') {
       loadPushSettings();
+    } else if (hqTab === 'community_files' || hqTab === 'archives') {
+      loadCommunityFiles();
+    } else if (hqTab === 'moderation') {
+      loadPendingSubmissions();
     }
-  }, [hqTab]);
+  }, [hqTab, isMockMod]);
+
+  const loadCommunityFiles = async () => {
+    try {
+      setLoadingCommunityCases(true);
+      const res = await sendToHost<{ cases: CommunityCaseMetadata[] }>('GET_COMMUNITY_FILES');
+      setCommunityCases(res.cases || []);
+    } catch (err: any) {
+      showToast('Failed to load community files cabinet.');
+    } finally {
+      setLoadingCommunityCases(false);
+    }
+  };
+
+  const loadPendingSubmissions = async () => {
+    try {
+      setLoadingPendingSubmissions(true);
+      const res = await sendToHost<{ submissions: CaseSubmission[] }>('GET_PENDING_CASES', { isMockMod });
+      setPendingSubmissions(res.submissions || []);
+    } catch (err: any) {
+      showToast('Failed to pull pending cases.');
+    } finally {
+      setLoadingPendingSubmissions(false);
+    }
+  };
+
+  const handleCaseSubmit = async (caseData: CustomCaseData) => {
+    try {
+      setSubmittingCase(true);
+      const res = await sendToHost<{ success: boolean }>('SUBMIT_CASE', { caseData });
+      if (res.success) {
+        showToast('🚀 Case submitted successfully! Pending moderator review.');
+        setHqTab('menu');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Submission failed.');
+    } finally {
+      setSubmittingCase(false);
+    }
+  };
+
+  const handleApproveCase = async (submissionId: string, caseData: CustomCaseData) => {
+    try {
+      const res = await sendToHost<{ success: boolean }>('APPROVE_CASE', { submissionId, caseData, isMockMod });
+      if (res.success) {
+        showToast('✓ Case Approved and Published!');
+        loadPendingSubmissions();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Approval failed.');
+    }
+  };
+
+  const handleRejectCase = async (submissionId: string, reason: string) => {
+    try {
+      const res = await sendToHost<{ success: boolean }>('REJECT_CASE', { submissionId, reason, isMockMod });
+      if (res.success) {
+        showToast('🛑 Case Rejected and returned to author.');
+        loadPendingSubmissions();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Rejection failed.');
+    }
+  };
+
+  const handleRateCase = async (rating: number) => {
+    if (!mystery) return;
+    try {
+      const res = await sendToHost<{ success: boolean; averageRating: number }>('RATE_CASE', { date: mystery.date, rating });
+      if (res.success) {
+        setUserRating(rating);
+        showToast(`★ Rated: ${rating} stars!`);
+      }
+    } catch (err: any) {
+      showToast('Rating failed.');
+    }
+  };
+
+  const loadPushSettings = async () => {
+    try {
+      const res = await sendToHost<{ isOptedIn: boolean }>('GET_PUSH_STATE');
+      setPushOptedIn(res.isOptedIn);
+    } catch (err: any) {
+      console.error('Failed to get push state:', err);
+    }
+  };
 
   useEffect(() => {
     if (cluesEndRef.current) {
@@ -175,7 +343,25 @@ export default function App() {
       setMystery(res.mystery);
       setProgress(res.progress);
       setStats(res.stats);
-      setIsLauncher(!!res.isLauncher);
+      
+      const resolved = res.resolvedPostType || 'DAILY_CASE';
+      setPostType(resolved);
+      setIsLauncher(resolved === 'HEADQUARTERS');
+
+
+
+      relayLog(`[App CLIENT DEBUG] Current Post ID: "${res.currentPostId || 'None'}"`);
+      relayLog(`[App CLIENT DEBUG] Resolved Post Type: "${resolved}"`);
+      relayLog(`[App CLIENT DEBUG] isLauncher: ${resolved === 'HEADQUARTERS'}`);
+
+      // Reset routing/navigation states dynamically to ensure no state carries over between posts
+      if (resolved === 'HEADQUARTERS') {
+        setShowIntro(true);
+        setHqTab('menu');
+      } else {
+        setActiveTab('office');
+      }
+
       setTodayCase(res.todayCase || null);
       setYesterdayCase(res.yesterdayCase || null);
       setCurrentInvestigation(res.currentInvestigation || null);
@@ -212,14 +398,7 @@ export default function App() {
     }
   };
 
-  const loadPushSettings = async () => {
-    try {
-      const res = await sendToHost<{ isOptedIn: boolean }>('GET_PUSH_STATE');
-      setPushOptedIn(res.isOptedIn);
-    } catch (err: any) {
-      console.error('Failed to get push state:', err);
-    }
-  };
+
 
   const handleTogglePush = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const nextVal = e.target.checked;
@@ -235,20 +414,43 @@ export default function App() {
     }
   };
 
+  const playSolveSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+      console.warn('AudioContext failed:', e);
+    }
+  };
+
   const handleGuessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guessInput.trim() || submittingGuess || !progress || progress.completed) return;
 
     try {
       setSubmittingGuess(true);
-      setFeedbackMsg(null);
+      setFeedbackMsg({ text: 'Analyzing...', type: 'info' });
 
-      const res = await sendToHost<{
-        progress: PlayerProgress;
-        newGuess: GuessRecord;
-        stats: PlayerStats;
-        solvedSummary?: GameStateResponse['solvedSummary'];
-      }>('SUBMIT_GUESS', { guess: guessInput, date: activeDate });
+      // Enforce a minimum 500ms delay for analysis feel
+      const [res] = await Promise.all([
+        sendToHost<{
+          progress: PlayerProgress;
+          newGuess: GuessRecord;
+          stats: PlayerStats;
+          solvedSummary?: GameStateResponse['solvedSummary'];
+        }>('SUBMIT_GUESS', { guess: guessInput, date: activeDate, category: selectedCategory }),
+        new Promise(resolve => setTimeout(resolve, 500))
+      ]);
 
       setProgress(res.progress);
       setStats(res.stats);
@@ -257,11 +459,26 @@ export default function App() {
       const categoryName = guess.closestCategory.toUpperCase();
 
       if (guess.status === 'Solved') {
+        playSolveSound();
         showToast(`🎉 ${categoryName} solved successfully!`);
       }
 
+      let hotnessPrefix = '❄️ Ice Cold';
+      if (guess.status === 'Solved') hotnessPrefix = '🎉 Correct';
+      else if (guess.status === 'Very Hot') hotnessPrefix = '🔥 Very Hot';
+      else if (guess.status === 'Hot') hotnessPrefix = '🌡 Hot';
+      else if (guess.status === 'Warm') hotnessPrefix = '♨️ Warm';
+      else if (guess.status === 'Cold') {
+        if (guess.score === 0.05) hotnessPrefix = '❄️ Ice Cold';
+        else hotnessPrefix = '🧊 Cold';
+      }
+
+      const matchText = guess.hint
+        ? guess.hint
+        : `Analysis: Guess "${guess.text}" is closest to ${categoryName}. Hotness: ${guess.status}!`;
+
       setFeedbackMsg({
-        text: `Analysis: Guess "${guess.text}" is closest to ${categoryName}. Hotness: ${guess.status}!`,
+        text: `[${hotnessPrefix}] ${matchText}`,
         type: guess.status === 'Solved' ? 'success' : 'info'
       });
 
@@ -316,7 +533,7 @@ export default function App() {
   const handleShare = () => {
     if (!progress || !mystery) return;
     const unlockedCluesCount = Math.max(0, progress.revealedClues.length - (mystery.initialClues?.length || 3));
-    const shareText = `🕵️ Detective Daily Report - ${mystery.date}
+    const shareText = `🕵️ CrimeGuess Case Report - ${mystery.date}
 Case: "${mystery.title}"
 Score: ${progress.score}/100
 Attempts: ${progress.attempts}
@@ -325,7 +542,7 @@ Clues Unlocked: ${unlockedCluesCount}
 Rank: ${stats?.gamesSolved ? (stats.gamesSolved >= 10 ? 'Chief of Detectives' : stats.gamesSolved >= 6 ? 'Senior Inspector' : 'Inspector') : 'Novice'}
 Streak: 🔥 ${stats?.currentStreak || 0} days
 
-Play today's AI-generated case on Reddit Detective Daily!`;
+Play and solve cases on CrimeGuess!`;
 
     navigator.clipboard.writeText(shareText);
     showToast('📋 Copied scoring dossier to clipboard!');
@@ -368,6 +585,162 @@ Play today's AI-generated case on Reddit Detective Daily!`;
     return 'Novice Sleuth';
   };
 
+  // Cover Screen / Splash view when inline
+  if (viewMode === 'inline') {
+    const handleExpand = async (e: React.MouseEvent) => {
+      relayLog('ENTER HQ CLICK');
+      try {
+        await requestExpandedMode(e.nativeEvent, 'game');
+      } catch (err) {
+        console.error('Failed to request expanded mode:', err);
+      }
+    };
+
+    if (isLauncher) {
+      const rank = getDetectiveRank(stats?.gamesSolved);
+      const streak = stats?.currentStreak || 0;
+      const score = (stats?.totalScore || 0).toLocaleString();
+
+      return (
+        <div 
+          className="app-container font-mono text-cyan" 
+          style={{ 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            padding: '12px',
+            background: '#050608',
+            minHeight: '320px'
+          }}
+        >
+          <div 
+            className="glass-panel" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '400px', 
+              padding: '20px', 
+              border: '2px solid var(--primary)', 
+              boxShadow: '0 0 15px rgba(0, 240, 255, 0.15)',
+              background: 'rgba(10, 12, 16, 0.95)',
+              borderRadius: '10px',
+              textAlign: 'center'
+            }}
+          >
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.2', fontSize: '12px' }}>
+              {`═══════════════════════════════\n\n        🕵 CRIMEGUESS\n\n      Think. Deduce. Solve.\n\n═══════════════════════════════`}
+            </div>
+
+            <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', fontSize: '13px' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>⚡ Detective Rank: </span>
+                <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{rank}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>🔥 Daily Streak: </span>
+                <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{streak} Days</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>🏆 Detective Score: </span>
+                <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{score}</span>
+              </div>
+            </div>
+
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.2', fontSize: '12px', margin: '4px 0' }}>
+              {`═══════════════════════════════`}
+            </div>
+
+            <button 
+              ref={expandButtonRef}
+              onClick={handleExpand}
+              className="btn font-mono" 
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                fontSize: '13px', 
+                fontWeight: 'bold',
+                marginTop: '12px',
+                background: 'rgba(0, 240, 255, 0.1)',
+                border: '1.5px solid var(--primary)',
+                color: 'var(--primary)',
+                borderRadius: '6px'
+              }}
+            >
+              ▶ Enter Headquarters
+            </button>
+          </div>
+        </div>
+      );
+    } else {
+      const title = mystery?.title || 'Loading Mystery...';
+      const difficulty = todayCase?.difficulty || 4;
+      const difficultyStars = '★'.repeat(difficulty) + '☆'.repeat(5 - difficulty);
+
+      return (
+        <div 
+          className="app-container font-mono text-cyan" 
+          style={{ 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            padding: '12px',
+            background: '#050608',
+            minHeight: '320px'
+          }}
+        >
+          <div 
+            className="glass-panel" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '400px', 
+              padding: '20px', 
+              border: '2px solid var(--primary)', 
+              boxShadow: '0 0 15px rgba(0, 240, 255, 0.15)',
+              background: 'rgba(10, 12, 16, 0.95)',
+              borderRadius: '10px',
+              textAlign: 'center'
+            }}
+          >
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.2', fontSize: '12px' }}>
+              {`═══════════════════════════════\n\n        🕵 CRIMEGUESS\n\n             DAILY CASE\n\n═══════════════════════════════`}
+            </div>
+
+            <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', fontSize: '13px' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Case: </span>
+                <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{title}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Difficulty: </span>
+                <span style={{ color: 'var(--secondary)', fontWeight: 'bold' }}>{difficultyStars}</span>
+              </div>
+            </div>
+
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.2', fontSize: '12px', margin: '4px 0' }}>
+              {`═══════════════════════════════`}
+            </div>
+
+            <button 
+              ref={expandButtonRef}
+              onClick={handleExpand}
+              className="btn font-mono" 
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                fontSize: '13px', 
+                fontWeight: 'bold',
+                marginTop: '12px',
+                background: 'rgba(0, 240, 255, 0.1)',
+                border: '1.5px solid var(--primary)',
+                color: 'var(--primary)',
+                borderRadius: '6px'
+              }}
+            >
+              ▶ Start Investigation
+            </button>
+          </div>
+        </div>
+      );
+    }
+  }
+
   // Rendering Loader
   if (loading && !progress && !isLauncher) {
     return (
@@ -387,6 +760,7 @@ Play today's AI-generated case on Reddit Detective Daily!`;
 
   // A. HQ CINEMATIC INTRO VIEW
   if (isLauncher && showIntro) {
+    relayLog('START INTRO');
     return (
       <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', background: '#050608' }}>
         <div style={{ width: '100%', maxWidth: '600px', padding: '12px' }}>
@@ -406,6 +780,7 @@ Play today's AI-generated case on Reddit Detective Daily!`;
 
   // B. HQ DASHBOARD HUD VIEW
   if (isLauncher) {
+    relayLog('SHOW HEADQUARTERS');
     const currentCase = currentInvestigation || todayCase;
     const currentCaseNum = currentCase ? currentCase.caseNumber : 183;
     const currentDifficulty = currentCase ? currentCase.difficulty || 3 : 4;
@@ -543,6 +918,19 @@ Play today's AI-generated case on Reddit Detective Daily!`;
                 </button>
                 <button 
                   className="hq-menu-link"
+                  onClick={() => setHqTab('submit_case')}
+                >
+                  📝 Submit a Case
+                </button>
+                <button 
+                  className="hq-menu-link"
+                  onClick={() => setHqTab('community_files')}
+                >
+                  🗂 Community Files
+                </button>
+
+                <button 
+                  className="hq-menu-link"
                   onClick={() => setHqTab('profile')}
                 >
                   👤 Detective Profile
@@ -559,6 +947,13 @@ Play today's AI-generated case on Reddit Detective Daily!`;
                 >
                   ⚙ Settings
                 </button>
+                <button 
+                  className="hq-menu-link"
+                  onClick={() => setHqTab('moderation')}
+                  style={{ borderLeft: '2px solid var(--secondary)', paddingLeft: '8px' }}
+                >
+                  ⚙️ Moderator Panel {isMockMod && '(Mock On)'}
+                </button>
               </div>
 
               <div style={{ whiteSpace: 'pre-wrap', textAlign: 'center', lineHeight: '1.2', fontSize: '14px', marginTop: '4px' }}>
@@ -570,10 +965,10 @@ Play today's AI-generated case on Reddit Detective Daily!`;
           {/* C. ARCHIVES VIEW */}
           {hqTab === 'archives' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-              <ArchivesPanel
-                cases={detailedArchives}
+              <FilingCabinet
+                cases={communityCases}
                 onSelectCase={handleNavigateToCase}
-                activeDate=""
+                title="Case Archive"
               />
               <button 
                 className="btn font-mono" 
@@ -642,12 +1037,80 @@ Play today's AI-generated case on Reddit Detective Daily!`;
               </button>
             </div>
           )}
+
+          {/* SUBMIT A CASE VIEW */}
+          {hqTab === 'submit_case' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+              <CaseEditor
+                onSubmit={handleCaseSubmit}
+                submitting={submittingCase}
+              />
+              <button 
+                className="btn font-mono" 
+                style={{ width: '100%', padding: '10px', fontSize: '12px' }}
+                onClick={() => setHqTab('menu')}
+              >
+                ◀ Back to Headquarters
+              </button>
+            </div>
+          )}
+
+          {/* COMMUNITY FILES VIEW */}
+          {hqTab === 'community_files' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+              {loadingCommunityCases ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Opening filing cabinet...</p>
+              ) : (
+                <FilingCabinet
+                  cases={communityCases}
+                  onSelectCase={handleNavigateToCase}
+                  title="Community Files"
+                />
+              )}
+              <button 
+                className="btn font-mono" 
+                style={{ width: '100%', padding: '10px', fontSize: '12px' }}
+                onClick={() => setHqTab('menu')}
+              >
+                ◀ Back to Headquarters
+              </button>
+            </div>
+          )}
+
+          {/* MODERATOR CONTROL PANEL */}
+          {hqTab === 'moderation' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)', padding: '8px', borderRadius: '6px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mock Mod Mode (Local Testing)</span>
+                <input
+                  type="checkbox"
+                  checked={isMockMod}
+                  onChange={(e) => setIsMockMod(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+              </div>
+              <ModeratorReview
+                submissions={pendingSubmissions}
+                onApprove={handleApproveCase}
+                onReject={handleRejectCase}
+                loading={loadingPendingSubmissions}
+              />
+              <button 
+                className="btn font-mono" 
+                style={{ width: '100%', padding: '10px', fontSize: '12px', marginTop: '8px' }}
+                onClick={() => setHqTab('menu')}
+              >
+                ◀ Back to Headquarters
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   // C. DAILY GAME PLAYABLE POST VIEW
+  relayLog('OPEN DAILY CASE');
   return (
     <div className="app-container layout-split">
       {toastText && (
@@ -698,7 +1161,9 @@ Play today's AI-generated case on Reddit Detective Daily!`;
             }}
           >
             <div>
-              <p className="font-mono text-muted" style={{ fontSize: '9px' }}>CASE FILE: {mystery.date}</p>
+              <p className="font-mono" style={{ fontSize: '9px', color: postType === 'COMMUNITY_CASE' ? 'var(--secondary)' : 'var(--text-muted)' }}>
+                {postType === 'COMMUNITY_CASE' ? 'COMMUNITY CASE FILE' : `CASE FILE: ${mystery.date}`}
+              </p>
               <h3 className="text-main" style={{ fontSize: '15px', fontWeight: '600' }}>{mystery.title}</h3>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -744,6 +1209,9 @@ Play today's AI-generated case on Reddit Detective Daily!`;
               submitting={submittingGuess}
               guesses={progress.guesses}
               completed={progress.completed}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              solvedStatus={progress.solved}
             />
 
             {feedbackMsg && (
@@ -854,6 +1322,42 @@ Play today's AI-generated case on Reddit Detective Daily!`;
             <button className="btn font-mono" style={{ width: '100%', marginTop: '16px', background: 'rgba(57, 211, 83, 0.1)', borderColor: 'var(--success)', color: 'var(--success)' }} onClick={handleShare}>
               📋 COPY SCORE DOSSIER REPORT
             </button>
+
+            {/* Feature 8: Rating Stars Feedback */}
+            <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', textAlign: 'center' }}>
+              <span className="font-mono text-muted" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>
+                RATE TODAY'S CRIMEGUESS CASE
+              </span>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const filled = userRating !== null ? star <= userRating : false;
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => handleRateCase(star)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontSize: '22px',
+                        color: filled ? 'var(--gold)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.25)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    >
+                      ★
+                    </button>
+                  );
+                })}
+              </div>
+              {userRating !== null && (
+                <span className="font-mono text-gold fade-in" style={{ fontSize: '10px', display: 'block', marginTop: '6px' }}>
+                  Rating submitted! Average rating: ★ {((mystery?.averageRating || 4.5) * 1 + userRating) / 2}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

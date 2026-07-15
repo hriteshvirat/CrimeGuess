@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrimeGuess Splash</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #050608;
+      --primary: #00f0ff;
+      --secondary: #ffa800;
+      --text-main: #f0f2f5;
+      --text-muted: #8e9cae;
+      --font-mono: 'Share Tech Mono', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-base);
+      font-family: var(--font-mono);
+      color: var(--primary);
+    }
+    .app-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      min-height: 320px;
+    }
+    .glass-panel {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+      border: 2px solid var(--primary);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+      background: rgba(10, 12, 16, 0.95);
+      border-radius: 10px;
+      text-align: center;
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .divider {
+      white-space: pre-wrap;
+      line-height: 1.2;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    .logo-block {
+      white-space: pre-wrap;
+      line-height: 1.2;
+      font-size: 12px;
+    }
+    .stats-block {
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+      font-size: 13px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .stat-label {
+      color: var(--text-muted);
+    }
+    .stat-value {
+      color: var(--text-main);
+      font-weight: bold;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: bold;
+      font-family: var(--font-mono);
+      margin-top: 12px;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1.5px solid var(--primary);
+      color: var(--primary);
+      border-radius: 6px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: rgba(0, 240, 255, 0.2);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(0, 240, 255, 0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container" id="app-container">
+    <!-- Loading View -->
+    <div class="loading-screen" id="loading-view">
+      <div class="spinner"></div>
+      <div>LOADING MYSTERY STATE...</div>
+    </div>
+
+    <!-- Launcher Cover View (Hidden by default) -->
+    <div class="glass-panel hidden" id="launcher-view">
+      <div class="logo-block">═══════════════════════════════
+
+        🕵 CRIMEGUESS
+
+      Think. Deduce. Solve.
+
+═══════════════════════════════</div>
+      <div class="stats-block">
+        <div class="stat-row">
+          <span class="stat-label">⚡ Detective Rank:</span>
+          <span class="stat-value" id="rank-val">Detective Third Class</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">🔥 Daily Streak:</span>
+          <span class="stat-value" id="streak-val">0 Days</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">🏆 Detective Score:</span>
+          <span class="stat-value" id="score-val">0</span>
+        </div>
+      </div>
+      <div class="divider">═══════════════════════════════</div>
+      <button class="btn" id="btn-launcher">▶ Enter Headquarters</button>
+    </div>
+
+    <!-- Daily Case Cover View (Hidden by default) -->
+    <div class="glass-panel hidden" id="case-view">
+      <div class="logo-block">═══════════════════════════════
+
+        🕵 CRIMEGUESS
+
+             DAILY CASE
+
+═══════════════════════════════</div>
+      <div class="stats-block">
+        <div class="stat-row">
+          <span class="stat-label">Case:</span>
+          <span class="stat-value" id="case-title-val">Loading Case...</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Difficulty:</span>
+          <span class="stat-value" style="color: var(--secondary);" id="difficulty-val">★★★★☆</span>
+        </div>
+      </div>
+      <div class="divider">═══════════════════════════════</div>
+      <button class="btn" id="btn-case">▶ Start Investigation</button>
+    </div>
+  </div>
+
+  <script type="module" src="./splash.ts"></script>
+</body>
+</html>

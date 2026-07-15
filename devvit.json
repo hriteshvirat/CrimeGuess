@@ -8,6 +8,10 @@
     "dir": "webroot",
     "entrypoints": {
       "default": {
+        "entry": "splash.html",
+        "inline": true
+      },
+      "game": {
         "entry": "index.html"
       }
     }
@@ -38,7 +42,7 @@
   "menu": {
     "items": [
       {
-        "label": "Create Detective Daily Post",
+        "label": "Create CrimeGuess Post",
         "description": "Create a new daily mystery post",
         "forUserType": "moderator",
         "location": [
@@ -47,7 +51,7 @@
         "endpoint": "/internal/menu/create-post"
       },
       {
-        "label": "Create Detective Headquarters Launcher",
+        "label": "Create CrimeGuess Headquarters Launcher",
         "description": "Create the permanent game launcher post",
         "forUserType": "moderator",
         "location": [

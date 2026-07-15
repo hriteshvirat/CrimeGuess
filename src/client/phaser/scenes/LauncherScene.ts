@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import AssetHelper from '../assets/AssetHelper';
+import { relayLog } from '../../App';
 
 export default class LauncherScene extends Phaser.Scene {
   private rainGraphics!: Phaser.GameObjects.Graphics;
@@ -21,6 +22,8 @@ export default class LauncherScene extends Phaser.Scene {
   private soundText!: Phaser.GameObjects.Text;
 
   private skipIntro: boolean = false;
+
+  public drawerOpenAmount: number = 0;
 
   constructor() {
     super('LauncherScene');
@@ -79,12 +82,12 @@ export default class LauncherScene extends Phaser.Scene {
     // 3. CRT Monitor graphics
     this.crtMonitor = this.add.graphics();
 
-    // CRT Screen Text
-    this.crtText = this.add.text(width / 2 - 95, 235, '', {
+    // CRT Screen Text (increased size and adjusted positioning)
+    this.crtText = this.add.text(width / 2 - 128, 212, '', {
       fontFamily: 'Share Tech Mono',
-      fontSize: '11px',
+      fontSize: '13px',
       color: '#00ff66',
-      lineSpacing: 4
+      lineSpacing: 5
     });
 
     // Sound text HUD (Bottom Right)
@@ -125,6 +128,43 @@ export default class LauncherScene extends Phaser.Scene {
       // Start cinematic sequence
       this.time.delayedCall(800, () => this.playDoorOpen());
     }
+
+
+
+    // Event listener for opening filing cabinet
+    window.addEventListener('PHASER_CABINET_DRAWER_OPEN', () => {
+      this.soundText.setText('* DRAWER SLIDES OPEN *');
+      this.tweens.add({
+        targets: this,
+        drawerOpenAmount: 30,
+        duration: 500,
+        ease: 'Cubic.easeOut'
+      });
+      // Pan camera slightly towards cabinet
+      this.cameras.main.pan(380, 170, 600, 'Cubic.easeOut');
+    });
+
+    // Event listener for sliding case files folder to desk
+    window.addEventListener('PHASER_FOLDER_SLIDE_DESK', () => {
+      this.soundText.setText('* FOLDER SLIDES ONTO DESK *');
+      const tempFolder = this.add.sprite(545, 110, 'case_folder').setScale(0.3);
+      this.tweens.add({
+        targets: tempFolder,
+        x: width / 2,
+        y: 270,
+        scale: 1,
+        angle: 360,
+        duration: 700,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.soundText.setText('* FOLDER OPENS *');
+          this.cameras.main.zoomTo(1.2, 500, 'Quad.easeInOut', true);
+          this.time.delayedCall(500, () => {
+            tempFolder.destroy();
+          });
+        }
+      });
+    });
   }
 
   public update(time: number): void {
@@ -171,24 +211,26 @@ export default class LauncherScene extends Phaser.Scene {
       this.crtMonitor.clear();
       const flicker = 0.9 + Math.random() * 0.1;
       
-      // Draw CRT Outer casing on center of desk
+      // Draw CRT Outer casing on center of desk (Larger size)
       this.crtMonitor.lineStyle(2, 0x333333, 1);
       this.crtMonitor.fillStyle(0x181a1f, 1);
-      this.crtMonitor.fillRect(width / 2 - 110, 220, 220, 80);
-      this.crtMonitor.strokeRect(width / 2 - 110, 220, 220, 80);
+      this.crtMonitor.fillRect(width / 2 - 150, 190, 300, 120);
+      this.crtMonitor.strokeRect(width / 2 - 150, 190, 300, 120);
 
-      // CRT screen bezel
+      // CRT screen bezel (Larger size)
       this.crtMonitor.fillStyle(0x08250f, 0.95 * flicker);
-      this.crtMonitor.fillRect(width / 2 - 102, 226, 204, 68);
+      this.crtMonitor.fillRect(width / 2 - 140, 200, 280, 100);
       this.crtMonitor.lineStyle(1.5, 0x00ff66, 0.65 * flicker);
-      this.crtMonitor.strokeRect(width / 2 - 102, 226, 204, 68);
+      this.crtMonitor.strokeRect(width / 2 - 140, 200, 280, 100);
 
       // Scanlines effect
       this.crtMonitor.lineStyle(0.5, 0x000000, 0.2);
-      for (let y = 227; y < 294; y += 3) {
-        this.crtMonitor.lineBetween(width / 2 - 102, y, width / 2 + 102, y);
+      for (let y = 201; y < 299; y += 3) {
+        this.crtMonitor.lineBetween(width / 2 - 140, y, width / 2 + 140, y);
       }
     }
+
+
   }
 
   private playDoorOpen(): void {
@@ -288,10 +330,11 @@ export default class LauncherScene extends Phaser.Scene {
   }
 
   private showBeginButton(): void {
+    relayLog('SHOW BEGIN');
     this.introStep = 5;
     const { width } = this.scale;
     const bx = width / 2;
-    const by = 276;
+    const by = 282;
 
     // Container for styling
     this.beginButton = this.add.container(bx, by);
@@ -299,12 +342,12 @@ export default class LauncherScene extends Phaser.Scene {
     const btnBg = this.add.graphics();
     btnBg.fillStyle(0x00ff66, 0.1);
     btnBg.lineStyle(1.5, 0x00ff66, 0.85);
-    btnBg.fillRect(-35, -9, 70, 18);
-    btnBg.strokeRect(-35, -9, 70, 18);
+    btnBg.fillRect(-45, -12, 90, 24);
+    btnBg.strokeRect(-45, -12, 90, 24);
 
     const btnText = this.add.text(0, 0, 'BEGIN', {
       fontFamily: 'Share Tech Mono',
-      fontSize: '10px',
+      fontSize: '12px',
       color: '#00ff66',
       fontStyle: 'bold'
     }).setOrigin(0.5);
@@ -312,15 +355,15 @@ export default class LauncherScene extends Phaser.Scene {
     this.beginButton.add([btnBg, btnText]);
 
     // Make interactive
-    btnBg.setInteractive(new Phaser.Geom.Rectangle(-35, -9, 70, 18), Phaser.Geom.Rectangle.Contains);
+    btnBg.setInteractive(new Phaser.Geom.Rectangle(-45, -12, 90, 24), Phaser.Geom.Rectangle.Contains);
 
     // Hover logic
     btnBg.on('pointerover', () => {
       btnBg.clear();
       btnBg.fillStyle(0x00ff66, 0.25);
       btnBg.lineStyle(1.5, 0x00ff66, 1);
-      btnBg.fillRect(-35, -9, 70, 18);
-      btnBg.strokeRect(-35, -9, 70, 18);
+      btnBg.fillRect(-45, -12, 90, 24);
+      btnBg.strokeRect(-45, -12, 90, 24);
       btnText.setColor('#ffffff');
       this.soundText.setText('* BUTTON HOVER *');
     });
@@ -329,8 +372,8 @@ export default class LauncherScene extends Phaser.Scene {
       btnBg.clear();
       btnBg.fillStyle(0x00ff66, 0.1);
       btnBg.lineStyle(1.5, 0x00ff66, 0.85);
-      btnBg.fillRect(-35, -9, 70, 18);
-      btnBg.strokeRect(-35, -9, 70, 18);
+      btnBg.fillRect(-45, -12, 90, 24);
+      btnBg.strokeRect(-45, -12, 90, 24);
       btnText.setColor('#00ff66');
       this.soundText.setText('');
     });

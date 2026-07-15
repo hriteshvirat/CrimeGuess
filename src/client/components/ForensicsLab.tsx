@@ -7,7 +7,9 @@ interface ForensicsLabProps {
 }
 
 export default function ForensicsLab({ progress, onInvestigate, mystery }: ForensicsLabProps) {
-  const actions = Object.keys(INVESTIGATIONS) as InvestigationAction[];
+  const actions = mystery?.forensicsConfig
+    ? (Object.keys(mystery.forensicsConfig) as InvestigationAction[])
+    : (Object.keys(INVESTIGATIONS) as InvestigationAction[]);
 
   return (
     <div className="glass-panel" style={{ padding: '16px' }}>
@@ -16,7 +18,10 @@ export default function ForensicsLab({ progress, onInvestigate, mystery }: Foren
       </h4>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
         {actions.map((act) => {
-          const item = INVESTIGATIONS[act];
+          const standardItem = INVESTIGATIONS[act];
+          const overrideItem = mystery?.forensicsConfig?.[act];
+          if (mystery?.forensicsConfig && !overrideItem) return null;
+          const item = overrideItem ? { ...standardItem, ...overrideItem } : standardItem;
           const clueText = mystery?.unlockedInvestigations?.[act];
           const isUnlocked = !!clueText;
 

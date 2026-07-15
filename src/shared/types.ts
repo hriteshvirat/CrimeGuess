@@ -1,6 +1,10 @@
 export interface HiddenAnswer {
   answer: string;
-  embedding: number[];
+  veryHot: string[];
+  hot: string[];
+  warm: string[];
+  cold: string[];
+  embedding?: number[];
 }
 
 export interface Mystery {
@@ -18,6 +22,14 @@ export interface Mystery {
   method: HiddenAnswer;
   twist: HiddenAnswer;
   investigations: Record<string, string>; // Maps InvestigationAction to clue string
+  forensicsConfig?: Record<string, {
+    action: string;
+    label: string;
+    cost: number;
+    icon: string;
+    description: string;
+    isUnlockedByDefault?: boolean;
+  }>;
 }
 
 // Client-safe version of the mystery (withholding target solutions and embeddings)
@@ -34,6 +46,15 @@ export interface MysteryClient {
     twist?: string;
   };
   unlockedInvestigations?: Record<string, string>; // Maps InvestigationAction to clue string
+  averageRating?: number;
+  forensicsConfig?: Record<string, {
+    action: string;
+    label: string;
+    cost: number;
+    icon: string;
+    description: string;
+    isUnlockedByDefault?: boolean;
+  }>;
 }
 
 export interface GuessRecord {
@@ -42,6 +63,7 @@ export interface GuessRecord {
   status: 'Cold' | 'Warm' | 'Hot' | 'Very Hot' | 'Solved';
   closestCategory: 'culprit' | 'motive' | 'method' | 'twist';
   timestamp: string;
+  hint?: string;
 }
 
 export interface PlayerProgress {
@@ -236,6 +258,7 @@ export interface GameStateResponse {
   progress: PlayerProgress;
   stats: PlayerStats;
   isLauncher?: boolean;
+  resolvedPostType?: 'HEADQUARTERS' | 'DAILY_CASE' | 'COMMUNITY_CASE';
   launcherPostId?: string;
   currentPostId?: string;
   todayCase?: LauncherCaseMetadata | null;
@@ -256,6 +279,7 @@ export interface GameStateResponse {
 
 export interface GuessRequest {
   guess: string;
+  category: 'culprit' | 'motive' | 'method' | 'twist';
   date?: string; // date query override for archives
 }
 
@@ -281,6 +305,50 @@ export interface LeaderboardResponse {
   topStreaks: LeaderboardEntry[];
 }
 
-export interface ArchiveListResponse {
-  cases: ArchiveCase[];
+export interface ArchiveCaseExtended extends ArchiveCase {
+  difficulty?: number;
+  solveCount?: number;
+  rating?: number;
+  played?: boolean;
 }
+
+export interface ArchiveListResponse {
+  cases: ArchiveCaseExtended[];
+}
+
+export interface CustomCaseData {
+  title: string;
+  story: string;
+  initialClues: string[];
+  culprit: string;
+  motive: string;
+  method: string;
+  twist: string;
+  difficulty: number; // 1 to 5
+  estimatedTime: string; // e.g. "15 mins"
+  investigations: Record<string, string>; // Maps InvestigationAction to clue string
+  timeline: string;
+  evidenceExplanation: string;
+  thumbnailUrl?: string;
+}
+
+export interface CaseSubmission {
+  id: string;
+  author: string;
+  authorRedditId?: string;
+  createdDate: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+  caseData: CustomCaseData;
+}
+
+export interface CommunityCaseMetadata extends LauncherCaseMetadata {
+  author: string;
+  estimatedTime: string;
+  difficulty: number;
+  averageRating: number;
+  totalRatings: number;
+  playCount: number;
+  solvedCount: number;
+}
+

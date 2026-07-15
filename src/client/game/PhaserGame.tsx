@@ -41,11 +41,24 @@ export default function PhaserGame({
       height: 340,
       parent: gameContainerRef.current,
       backgroundColor: '#0a0b0e',
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      },
       scene: [launcherScene, officeScene, solvedScene]
     };
 
     const game = new Phaser.Game(config);
     gameRef.current = game;
+
+    let initialSceneName = 'DetectiveOffice';
+    if (isLauncher) {
+      initialSceneName = 'LauncherScene';
+    } else if (gameState.completed && solvedSummary) {
+      initialSceneName = 'SolvedScene';
+    }
+
+    console.log(`[PhaserGame CLIENT DEBUG] Initial Scene: "${initialSceneName}"`);
 
     if (isLauncher) {
       game.scene.start('LauncherScene', { skipIntro: !showIntro });
@@ -55,7 +68,23 @@ export default function PhaserGame({
       game.scene.start('DetectiveOffice', { ip: ipRemaining, gameState, mystery });
     }
 
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width } = entry.contentRect;
+        if (width === 0) continue;
+        const targetHeight = Math.floor((width * 340) / 600);
+        if (gameContainerRef.current) {
+          gameContainerRef.current.style.height = `${targetHeight}px`;
+        }
+      }
+    });
+
+    if (gameContainerRef.current && gameContainerRef.current.parentElement) {
+      resizeObserver.observe(gameContainerRef.current.parentElement);
+    }
+
     return () => {
+      resizeObserver.disconnect();
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
@@ -116,7 +145,7 @@ export default function PhaserGame({
         position: 'relative'
       }}
     >
-      <div ref={gameContainerRef} style={{ width: '100%', height: '340px' }} />
+      <div ref={gameContainerRef} style={{ width: '100%', height: 'auto', minHeight: '100px' }} />
     </div>
   );
 }

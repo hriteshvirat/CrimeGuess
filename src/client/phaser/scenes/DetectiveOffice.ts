@@ -12,10 +12,10 @@ export default class DetectiveOffice extends Phaser.Scene {
   private ipTextHUD!: Phaser.GameObjects.Text;
   private rainGraphics!: Phaser.GameObjects.Graphics;
   private rainDrops: { x: number; y: number; speed: number; len: number }[] = [];
+  private dustParticles: Phaser.GameObjects.Arc[] = [];
+  private lampCone!: Phaser.GameObjects.Graphics;
 
-  // Slots icons references
   private slotIcons: Record<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Text> = {};
-
   constructor(
     onSelect: (action: InvestigationAction) => void,
     ipRemaining: number,
@@ -33,6 +33,17 @@ export default class DetectiveOffice extends Phaser.Scene {
     if (data.ip !== undefined) this.ipRemaining = data.ip;
     if (data.gameState) this.gameState = data.gameState;
     if (data.mystery) this.mystery = data.mystery;
+
+    if (this.sys.isActive() && this.slotIcons) {
+      const categories: ('culprit' | 'motive' | 'method' | 'twist')[] = ['culprit', 'motive', 'method', 'twist'];
+      const boardStartX = 230;
+      const boardGap = 100;
+      categories.forEach((cat, index) => {
+        const x = boardStartX + (index * boardGap);
+        const y = 90;
+        this.drawSlotStatus(cat, x, y);
+      });
+    }
   }
 
   public preload(): void {
@@ -44,6 +55,9 @@ export default class DetectiveOffice extends Phaser.Scene {
     const { width, height } = this.scale;
     // Silence unused warning
     this.onSelect;
+
+    // Camera entry slide
+    this.cameras.main.fadeIn(600, 10, 11, 14);
 
     // 1. Draw floorboards procedurally
     const floor = this.add.graphics();
@@ -80,7 +94,6 @@ export default class DetectiveOffice extends Phaser.Scene {
         len: 4 + Math.random() * 6
       });
     }
-
     // 3. Draw Corkboard backing on the Wall
     this.add.image(380, 100, 'corkboard_bg').setOrigin(0.5);
 
@@ -106,9 +119,11 @@ export default class DetectiveOffice extends Phaser.Scene {
       // Check solve status to draw corresponding checkmark or padlock
       this.drawSlotStatus(cat, x, y);
     });
-
-    // 4. Draw Detective Desk
+    // 4. Draw Detective Desk & Lamp Light Cone overlay
     this.add.image(width / 2, 290, 'office_desk').setOrigin(0.5);
+
+    this.lampCone = this.add.graphics();
+    this.lampCone.setBlendMode(Phaser.BlendModes.ADD);
 
     // Notebook (Click triggers guess focus)
     const notebook = this.add.sprite(width / 2 - 40, 270, 'desk_notebook').setOrigin(0.5);
@@ -127,17 +142,53 @@ export default class DetectiveOffice extends Phaser.Scene {
       window.dispatchEvent(new CustomEvent('PHASER_NAV_TAB', { detail: 'forensics' }));
     });
 
-    // 5. HUD overlays
+    // Add slight wiggle rotation to paper items on hover
+    notebook.on('pointerover', () => {
+      this.tweens.add({
+        targets: notebook,
+        angle: { from: 0, to: 4 },
+        duration: 120,
+        yoyo: true,
+        repeat: 1
+      });
+    });
+    caseFolder.on('pointerover', () => {
+      this.tweens.add({
+        targets: caseFolder,
+        angle: { from: 0, to: -4 },
+        duration: 120,
+        yoyo: true,
+        repeat: 1
+      });
+    });
+
+    // Spawn floating dust particles
+    for (let i = 0; i < 20; i++) {
+      const px = Math.random() * width;
+      const py = Math.random() * height;
+      const dot = this.add.circle(px, py, 1 + Math.random() * 1.5, 0xffffff, 0.08);
+      this.dustParticles.push(dot);
+    }
+
+    // 5. HUD overlays & Ambient sound descriptors
     this.ipTextHUD = this.add.text(20, 15, `⚡ IP REMAINING: ${this.ipRemaining}`, {
       fontFamily: 'Share Tech Mono',
       fontSize: '13px',
       color: '#00f0ff'
     });
     this.ipTextHUD.setShadow(0, 0, 'rgba(0,240,255,0.4)', 6, true, true);
+
+    this.add.text(width - 20, 15, '[🔊 Rain Ambience • 🔊 Lamp hum]', {
+      fontFamily: 'Share Tech Mono',
+      fontSize: '9px',
+      color: '#8e9cae'
+    }).setOrigin(1, 0);
   }
 
-  public update(): void {
-    // Animate falling rain window lines
+  public update(time: number): void {
+    const { width, height } = this.scale;
+
+    // A. Animate falling rain window lines
     this.rainGraphics.clear();
     this.rainGraphics.lineStyle(1, 0x00f0ff, 0.45);
 
@@ -149,6 +200,27 @@ export default class DetectiveOffice extends Phaser.Scene {
       }
       this.rainGraphics.lineBetween(drop.x, drop.y, drop.x - 0.5, drop.y + drop.len);
     }
+
+    // B. Floating dust animation
+    this.dustParticles.forEach((p, idx) => {
+      p.y -= 0.12 + (idx % 3) * 0.04;
+      p.x += Math.sin(time * 0.002 + idx) * 0.12;
+      if (p.y < -10) {
+        p.y = height + 10;
+        p.x = Math.random() * width;
+      }
+    });
+
+    // C. Desk Lamp cone flicker/glow update
+    this.lampCone.clear();
+    const flicker = 0.90 + Math.sin(time * 0.04) * 0.06 + Math.random() * 0.04;
+    this.lampCone.fillStyle(0xffea88, 0.12 * flicker);
+    this.lampCone.beginPath();
+    this.lampCone.moveTo(width / 2, 180);
+    this.lampCone.lineTo(width / 2 - 140, height);
+    this.lampCone.lineTo(width / 2 + 140, height);
+    this.lampCone.closePath();
+    this.lampCone.fill();
   }
 
   /**
@@ -159,6 +231,41 @@ export default class DetectiveOffice extends Phaser.Scene {
     if (this.ipTextHUD) {
       this.ipTextHUD.setText(`⚡ IP REMAINING: ${this.ipRemaining}`);
     }
+  }
+
+
+
+  /**
+   * Outlines interactable sprites on pointer hover
+   */
+  private addHoverGlow(item: Phaser.GameObjects.Sprite, description: string): void {
+    let glowBox: Phaser.GameObjects.Graphics | null = null;
+    let descText: Phaser.GameObjects.Text | null = null;
+
+    item.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      glowBox = this.add.graphics();
+      glowBox.lineStyle(2, 0x00f0ff, 0.7);
+      glowBox.strokeRect(item.x - (item.width / 2) - 4, item.y - (item.height / 2) - 4, item.width + 8, item.height + 8);
+
+      descText = this.add.text(pointer.worldX + 12, pointer.worldY - 12, description, {
+        fontFamily: 'Outfit',
+        fontSize: '11px',
+        color: '#050608',
+        backgroundColor: '#00f0ff',
+        padding: { x: 6, y: 4 }
+      }).setOrigin(0, 1).setDepth(200);
+    });
+
+    item.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (descText) {
+        descText.setPosition(pointer.worldX + 12, pointer.worldY - 12);
+      }
+    });
+
+    item.on('pointerout', () => {
+      if (glowBox) { glowBox.destroy(); glowBox = null; }
+      if (descText) { descText.destroy(); descText = null; }
+    });
   }
 
   /**
@@ -198,38 +305,5 @@ export default class DetectiveOffice extends Phaser.Scene {
       // Locked Red Lock
       this.slotIcons[key] = this.add.sprite(x, y - 8, 'lock_icon').setOrigin(0.5);
     }
-  }
-
-  /**
-   * Outlines interactable sprites on pointer hover
-   */
-  private addHoverGlow(item: Phaser.GameObjects.Sprite, description: string): void {
-    let glowBox: Phaser.GameObjects.Graphics | null = null;
-    let descText: Phaser.GameObjects.Text | null = null;
-
-    item.on('pointerover', (pointer: Phaser.Input.Pointer) => {
-      glowBox = this.add.graphics();
-      glowBox.lineStyle(2, 0x00f0ff, 0.7);
-      glowBox.strokeRect(item.x - (item.width / 2) - 4, item.y - (item.height / 2) - 4, item.width + 8, item.height + 8);
-
-      descText = this.add.text(pointer.worldX + 12, pointer.worldY - 12, description, {
-        fontFamily: 'Outfit',
-        fontSize: '11px',
-        color: '#050608',
-        backgroundColor: '#00f0ff',
-        padding: { x: 6, y: 4 }
-      }).setOrigin(0, 1).setDepth(200);
-    });
-
-    item.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (descText) {
-        descText.setPosition(pointer.worldX + 12, pointer.worldY - 12);
-      }
-    });
-
-    item.on('pointerout', () => {
-      if (glowBox) { glowBox.destroy(); glowBox = null; }
-      if (descText) { descText.destroy(); descText = null; }
-    });
   }
 }

@@ -11,7 +11,13 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: 'assets',
     sourcemap: false,
-    minify: 'esbuild'
+    minify: 'esbuild',
+    rollupOptions: {
+      input: {
+        index: path.resolve(__dirname, 'src/client/index.html'),
+        splash: path.resolve(__dirname, 'src/client/splash.html')
+      }
+    }
   },
   resolve: {
     alias: {

@@ -27,7 +27,7 @@ export default function Sidebar({ activeTab, onTabChange, unlockedCluesCount, is
   return (
     <div className="sidebar-hud">
       <div className="sidebar-logo font-mono text-cyan">
-        {isLauncher ? 'CRIMEGUESS' : 'D.DAILY'}
+        CRIMEGUESS
       </div>
       <div className="sidebar-menu">
         {tabs.map((tab) => (
