@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+webroot/
+*.timestamp-*
+
+# Logs and test logs
+*.log
+*.txt
+import-out.txt
+output.txt
+output_new.txt
+
+# Local environment variables/secrets
+.env
+.env.local
+
+# OS Metadata
+.DS_Store

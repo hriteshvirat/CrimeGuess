@@ -1,0 +1,69 @@
+{
+  "name": "crime-guess",
+  "server": {
+    "dir": ".",
+    "entry": "dist/server.js"
+  },
+  "post": {
+    "dir": "webroot",
+    "entrypoints": {
+      "default": {
+        "entry": "index.html"
+      }
+    }
+  },
+  "permissions": {
+    "reddit": {
+      "enable": true,
+      "scope": "moderator"
+    },
+    "redis": true
+  },
+  "triggers": {
+    "onAppInstall": "/internal/trigger/app-install",
+    "onAppUpgrade": "/internal/trigger/app-upgrade",
+    "onPostSubmit": "/internal/trigger/post-submit"
+  },
+  "scheduler": {
+    "tasks": {
+      "daily_case_generator": {
+        "endpoint": "/internal/scheduler/daily-case-generator",
+        "cron": "0 0 * * *"
+      },
+      "pn_campaign": {
+        "endpoint": "/internal/scheduler/pn-campaign"
+      }
+    }
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Create Detective Daily Post",
+        "description": "Create a new daily mystery post",
+        "forUserType": "moderator",
+        "location": [
+          "subreddit"
+        ],
+        "endpoint": "/internal/menu/create-post"
+      },
+      {
+        "label": "Create Detective Headquarters Launcher",
+        "description": "Create the permanent game launcher post",
+        "forUserType": "moderator",
+        "location": [
+          "subreddit"
+        ],
+        "endpoint": "/internal/menu/create-launcher"
+      }
+    ]
+  },
+  "settings": {
+    "global": {
+      "openai_api_key": {
+        "type": "string",
+        "label": "OpenAI API Key",
+        "isSecret": true
+      }
+    }
+  }
+}

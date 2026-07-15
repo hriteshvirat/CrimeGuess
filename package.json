@@ -1,0 +1,35 @@
+{
+  "name": "crime-guess",
+  "version": "0.0.0",
+  "description": "AI-powered daily detective game for Reddit Games with a Hook Hackathon",
+  "main": "src/server/main.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "vite build && npm run build-server && tsc -p tsconfig.json && tsc -p src/client/tsconfig.json",
+    "dev": "devvit playtest crime_guess_dev",
+    "test": "node --loader ts-node/esm scratch/test_similarity.ts",
+    "playtest": "devvit playtest crime_guess_dev",
+    "testcmd": "node test-args.mjs playtest crime_guess_dev",
+    "build-server": "node scratch/build_server.js"
+  },
+  "dependencies": {
+    "@devvit/notifications": "0.13.8",
+    "@devvit/public-api": "0.13.8",
+    "@devvit/web": "0.13.8",
+    "phaser": "^3.80.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "devvit": "0.13.8",
+    "ts-node": "^10.9.2",
+    "typescript": "5.8.3",
+    "vite": "^5.3.1"
+  },
+  "private": true,
+  "license": "BSD-3-Clause"
+}

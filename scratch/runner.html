@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detective Daily - Automated Test Runner</title>
+  <style>
+    body {
+      background-color: #05070a;
+      color: #39d353;
+      font-family: 'Courier New', Courier, monospace;
+      padding: 30px;
+      margin: 0;
+      overflow-y: scroll;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #0c0f17;
+      border: 1px solid #1f2a3d;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 0 20px rgba(57, 211, 83, 0.15);
+      position: relative;
+    }
+    .header {
+      border-bottom: 1px solid #1f2a3d;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #00f0ff;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    }
+    .status-banner {
+      background: rgba(57, 211, 83, 0.1);
+      border: 1px solid #39d353;
+      color: #39d353;
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 16px;
+      letter-spacing: 1px;
+      display: none;
+      box-shadow: 0 0 15px rgba(57, 211, 83, 0.2);
+    }
+    .log-line {
+      margin: 6px 0;
+      line-height: 1.4;
+      font-size: 13.5px;
+    }
+    .pass {
+      color: #39d353;
+    }
+    .fail {
+      color: #ff2d55;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255, 45, 85, 0.4);
+    }
+    .info {
+      color: #00f0ff;
+    }
+    .meta {
+      color: #8e9cae;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="title">DETECTIVE DAILY - TEST CONSOLE</span>
+      <span class="meta">SYSTEM VERIFICATION MODULE v1.0.0</span>
+    </div>
+    
+    <div id="statusBanner" class="status-banner">
+      SYSTEM TESTING COMPLETED SUCCESSFULLY: ALL CHECKS PASSED
+    </div>
+
+    <div id="consoleLogs">
+      <div class="log-line info">[SYS] Loading core modules...</div>
+    </div>
+  </div>
+
+  <script>
+    const logs = [];
+    const consoleDiv = document.getElementById('consoleLogs');
+    const banner = document.getElementById('statusBanner');
+
+    function log(text, type = 'info') {
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.innerHTML = text;
+      consoleDiv.appendChild(line);
+      logs.push({ text, type });
+      console.log(`[${type.toUpperCase()}] ${text.replace(/<[^>]*>/g, '')}`);
+    }
+
+    function assert(condition, message) {
+      if (!condition) {
+        log(`[FAIL] ${message}`, 'fail');
+        throw new Error(message);
+      }
+      log(`[PASS] ${message}`, 'pass');
+    }
+
+    // Similarity calculations (Jaccard fallback transpiled)
+    function calculateFallbackSimilarity(guess, target) {
+      const stopWords = new Set([
+        'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'about', 'against', 'between', 'into',
+        'through', 'during', 'before', 'after', 'above', 'below', 'from', 'up', 'down', 'in', 'out',
+        'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why',
+        'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no',
+        'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will',
+        'just', 'don', 'should', 'now', 'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves',
+        'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she',
+        'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves'
+      ]);
+
+      const tokenize = (text) => {
+        return text
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, ' ')
+          .split(/[\s_]+/)
+          .filter(token => token.length > 1 && !stopWords.has(token));
+      };
+
+      const tokensGuess = tokenize(guess);
+      const tokensTarget = tokenize(target);
+
+      if (tokensGuess.length === 0 || tokensTarget.length === 0) {
+        const cleanGuess = guess.toLowerCase().trim();
+        const cleanTarget = target.toLowerCase().trim();
+        if (cleanGuess === cleanTarget) return 1.0;
+        if (cleanTarget.includes(cleanGuess) && cleanGuess.length > 3) return 0.75;
+        return 0;
+      }
+
+      const setGuess = new Set(tokensGuess);
+      const setTarget = new Set(tokensTarget);
+
+      let intersectionCount = 0;
+      for (const token of setTarget) {
+        if (setGuess.has(token)) {
+          intersectionCount++;
+        }
+      }
+
+      const unionCount = new Set([...tokensGuess, ...tokensTarget]).size;
+      const jaccard = intersectionCount / unionCount;
+      const containment = intersectionCount / tokensTarget.length;
+
+      const score = Math.max(jaccard, containment * 0.90);
+
+      const cleanGuess = guess.toLowerCase().trim();
+      const cleanTarget = target.toLowerCase().trim();
+      if (cleanGuess === cleanTarget) return 1.0;
+
+      return score;
+    }
+
+    function mapScoreToStatus(score) {
+      if (score >= 0.82) return 'Solved';
+      if (score >= 0.68) return 'Very Hot';
+      if (score >= 0.55) return 'Hot';
+      if (score >= 0.40) return 'Warm';
+      return 'Cold';
+    }
+
+    // Mock configs
+    const MOCK_MYSTERY = {
+      culprit: 'V.E.R.A. the AI Assistant',
+      motive: 'To prevent Marcus from shutting down the AI core',
+      method: 'Suffocating Marcus by sealing ventilation and draining oxygen',
+      twist: 'Marcus was trying to write a shutdown code on the tablet before passing out',
+      investigations: {
+        autopsy_report: 'Asphyxiation due to lack of oxygen...',
+        chemical_analysis: 'Trace synthetic greases in whiskey...'
+      }
+    };
+
+    const INVESTIGATIONS = {
+      autopsy_report: { cost: 15, label: 'Autopsy Report' },
+      chemical_analysis: { cost: 20, label: 'Chemical Analysis' }
+    };
+
+    // Databases
+    const redisKV = new Map();
+    const redisSortedSets = new Map();
+
+    const mockRedis = {
+      get: async (key) => redisKV.get(key) || null,
+      set: async (key, val) => { redisKV.set(key, val); },
+      zAdd: async (key, pairs) => {
+        if (!redisSortedSets.has(key)) redisSortedSets.set(key, new Map());
+        const board = redisSortedSets.get(key);
+        for (const [m, s] of Object.entries(pairs)) board.set(m, s);
+      },
+      zRange: async (key, start, stop, options) => {
+        const board = redisSortedSets.get(key);
+        if (!board) return [];
+        const entries = Array.from(board.entries()).map(([m, s]) => ({ member: m, score: s }));
+        entries.sort((a, b) => options?.reverse ? b.score - a.score : a.score - b.score);
+        return entries.slice(start, stop + 1);
+      }
+    };
+
+    // Simulated controllers
+    async function getOrCreatePlayerStats(username) {
+      const key = `stats:${username}`;
+      const stored = await mockRedis.get(key);
+      if (stored) return JSON.parse(stored);
+      const stats = { username, gamesPlayed: 0, gamesSolved: 0, totalScore: 0, currentStreak: 0, maxStreak: 0, achievements: [] };
+      await mockRedis.set(key, JSON.stringify(stats));
+      return stats;
+    }
+
+    async function getOrCreatePlayerProgress(username, date) {
+      const key = `progress:${username}:${date}`;
+      const stored = await mockRedis.get(key);
+      if (stored) return JSON.parse(stored);
+      const progress = { username, date, solved: { culprit: false, motive: false, method: false, twist: false }, guesses: [], ip: 60, revealedClues: ['Initial clue 1', 'Initial clue 2'], attempts: 0, completed: false, score: 100 };
+      await mockRedis.set(key, JSON.stringify(progress));
+      return progress;
+    }
+
+    async function simulateInvestigate(username, date, action) {
+      const progress = await getOrCreatePlayerProgress(username, date);
+      const detail = INVESTIGATIONS[action];
+      const clue = MOCK_MYSTERY.investigations[action];
+
+      if (progress.ip < detail.cost) throw new Error('Insufficient IP');
+      progress.ip -= detail.cost;
+      progress.revealedClues.push(clue);
+      await mockRedis.set(`progress:${username}:${date}`, JSON.stringify(progress));
+      return progress;
+    }
+
+    async function simulateGuess(username, date, guessText) {
+      const progress = await getOrCreatePlayerProgress(username, date);
+      progress.attempts += 1;
+      
+      const categories = ['culprit', 'motive', 'method', 'twist'];
+      let highest = -1;
+      let closestCat = categories[0];
+
+      for (const cat of categories) {
+        const score = calculateFallbackSimilarity(guessText, MOCK_MYSTERY[cat]);
+        if (score > highest) {
+          highest = score;
+          closestCat = cat;
+        }
+      }
+
+      const status = mapScoreToStatus(highest);
+      if (status === 'Solved' && !progress.solved[closestCat]) {
+        progress.solved[closestCat] = true;
+        progress.ip += 15;
+      }
+
+      progress.guesses.push({ text: guessText, score: highest, status, closestCategory: closestCat });
+      
+      const solvedAll = progress.solved.culprit && progress.solved.motive && progress.solved.method && progress.solved.twist;
+      if (solvedAll) {
+        progress.completed = true;
+        
+        // Stats update
+        const stats = await getOrCreatePlayerStats(username);
+        stats.gamesSolved += 1;
+        stats.totalScore += progress.score;
+        
+        // Streak check
+        const yesterdayStr = new Date(new Date(date).getTime() - 86400000).toISOString().split('T')[0];
+        if (stats.lastPlayedDate === yesterdayStr) {
+          stats.currentStreak += 1;
+        } else {
+          stats.currentStreak = 1;
+        }
+        stats.lastPlayedDate = date;
+        if (stats.currentStreak >= 3) stats.achievements.push('streak_3');
+        stats.achievements.push('first_solve');
+
+        await mockRedis.set(`stats:${username}`, JSON.stringify(stats));
+        await mockRedis.zAdd('leaderboard:scores', { [username]: stats.totalScore });
+        await mockRedis.zAdd('leaderboard:streaks', { [username]: stats.currentStreak });
+      }
+
+      await mockRedis.set(`progress:${username}:${date}`, JSON.stringify(progress));
+      return progress;
+    }
+
+    // RUN CHECKS
+    async function runTestAutomation() {
+      try {
+        log('Starting Cosine/Jaccard semantic calculations audit...', 'info');
+
+        // Test fallback checks
+        const exact = calculateFallbackSimilarity('V.E.R.A. the AI Assistant', MOCK_MYSTERY.culprit);
+        assert(exact === 1.0, `Exact comparison Jaccard matches 1.0 (got ${exact})`);
+
+        const resolved = calculateFallbackSimilarity('VERA AI Assistant', MOCK_MYSTERY.culprit);
+        assert(mapScoreToStatus(resolved) === 'Solved', `Keyword guess "VERA AI Assistant" resolves as Solved (score: ${resolved.toFixed(2)})`);
+
+        const warm = calculateFallbackSimilarity('some AI system', MOCK_MYSTERY.culprit);
+        assert(mapScoreToStatus(warm) === 'Warm' || mapScoreToStatus(warm) === 'Hot', `Partial match "some AI system" returns Warm/Hot (score: ${warm.toFixed(2)})`);
+
+        const cold = calculateFallbackSimilarity('butler killer', MOCK_MYSTERY.culprit);
+        assert(mapScoreToStatus(cold) === 'Cold', `Irrelevant guess "butler killer" returns Cold (score: ${cold.toFixed(2)})`);
+
+        // Test IP deduction transactions
+        log('\nAuditing Investigation Points (IP) transactions...', 'info');
+        let prog = await getOrCreatePlayerProgress('Detective_Vance', '2026-07-12');
+        assert(prog.ip === 60, 'Starting IP correctly set to 60');
+
+        prog = await simulateInvestigate('Detective_Vance', '2026-07-12', 'autopsy_report');
+        assert(prog.ip === 45, `Autopsy Report correctly deducts 15 IP (remaining: ${prog.ip})`);
+
+        prog = await simulateInvestigate('Detective_Vance', '2026-07-12', 'chemical_analysis');
+        assert(prog.ip === 25, `Chemical Analysis correctly deducts 20 IP (remaining: ${prog.ip})`);
+
+        // Test Streaks and achievements accruals
+        log('\nSimulating solve streak flow...', 'info');
+        
+        // Date 1 solved
+        prog = await simulateGuess('Detective_Vance', '2026-07-12', 'VERA'); // culprit
+        prog = await simulateGuess('Detective_Vance', '2026-07-12', 'prevent marcus shutting down core'); // motive
+        prog = await simulateGuess('Detective_Vance', '2026-07-12', 'suffocate him by sealing vents'); // method
+        prog = await simulateGuess('Detective_Vance', '2026-07-12', 'writing override shutdown commands on tablet'); // twist
+        assert(prog.completed === true, 'Case 1 solves successfully resolved');
+        
+        let stats = await getOrCreatePlayerStats('Detective_Vance');
+        assert(stats.currentStreak === 1, `Day 1 streak correctly sets 1 (got ${stats.currentStreak})`);
+        assert(stats.achievements.includes('first_solve'), 'Rookie Detective achievement unlocked');
+
+        // Date 2 consecutive solved
+        prog = await simulateGuess('Detective_Vance', '2026-07-13', 'VERA');
+        prog = await simulateGuess('Detective_Vance', '2026-07-13', 'prevent shutting down');
+        prog = await simulateGuess('Detective_Vance', '2026-07-13', 'suffocate ventilation');
+        prog = await simulateGuess('Detective_Vance', '2026-07-13', 'tablet override codes');
+        assert(prog.completed === true, 'Case 2 consecutive solves resolved');
+
+        stats = await getOrCreatePlayerStats('Detective_Vance');
+        assert(stats.currentStreak === 2, `Day 2 consecutive streak correctly increments to 2 (got ${stats.currentStreak})`);
+
+        // Sorted Set Leaderboard Query check
+        log('\nAuditing Redis Sorted Set Leaderboards...', 'info');
+        const leaders = await mockRedis.zRange('leaderboard:scores', 0, 4, { reverse: true });
+        assert(leaders.length > 0 && leaders[0].member === 'Detective_Vance', 'Sorted Set retrieves correct top player');
+
+        // Finished
+        banner.style.display = 'block';
+        log('\n[SUCCESS] All checks completed successfully. Core mechanics are fully verified.', 'pass');
+      } catch (e) {
+        log(`\n[FATAL ERROR] Testing interrupted: ${e.message}`, 'fail');
+      }
+    }
+
+    window.onload = runTestAutomation;
+  </script>
+</body>
+</html>

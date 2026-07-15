@@ -1,0 +1,4 @@
+name: crime-guess
+version: 0.0.0
+dependencies:
+  '@devvit/public-api': ^0.13.8
