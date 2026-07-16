@@ -55,7 +55,7 @@ if (typeof window !== 'undefined') {
 }
 
 async function sendToHost<T>(type: string, payload?: any): Promise<T> {
-  const isMockMode = typeof window !== 'undefined' && window.parent === window;
+  const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
   if (isMockMode) {
     return executeMockRequest<T>(type, payload);
   }
@@ -96,7 +96,7 @@ export default function App() {
     try {
       const mode = getWebViewMode();
       // Default to expanded for local mock mode
-      const isMockMode = typeof window !== 'undefined' && window.parent === window;
+      const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
       if (isMockMode) return 'expanded';
       return mode || 'inline';
     } catch (e) {
@@ -589,7 +589,7 @@ Play and solve cases on CrimeGuess!`;
   const handleNavigateToCase = (metadata: LauncherCaseMetadata | null) => {
     if (!metadata) return;
     audioHelper.play('ui_click');
-    const isMockMode = typeof window !== 'undefined' && window.parent === window;
+    const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
     if (isMockMode) {
       showToast(`[Mock Redirect] Navigating to: ${metadata.redditUrl}`);
       window.open(metadata.redditUrl, '_blank');
