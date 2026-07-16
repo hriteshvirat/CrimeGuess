@@ -21,7 +21,7 @@ New to CrimeGuess or short on time?
 
 If you'd like to quickly see how a complete investigation works, including evidence collection, forensic analysis, deductions, and the final case resolution, you can view the full gameplay walkthrough below.
 
-➡️ **[Case #2: The Last Flight Walkthrough](./walkthrough/README.md)**
+➡️ **[Case #2: The Last Flight Walkthrough](/walkthrough/Readme.md)**
 ---
 
 ## 💡 Inspiration
