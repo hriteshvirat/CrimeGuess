@@ -37,6 +37,35 @@ graph TD
 
 ---
 
+## 👾 Phaser Canvas & React Integration
+
+To provide a high-fidelity visual experience, CrimeGuess integrates the **Phaser 3 Game Engine** seamlessly into a **React App context**.
+
+### A. React-to-Phaser Synchronization
+The integration uses a unidirectional data-flow wrapper (`PhaserGame.tsx`) that bridges React state variables with the Phaser scene lifecycle.
+
+```mermaid
+sequenceDiagram
+    participant React as React Client (App.tsx)
+    participant Game as React Wrapper (PhaserGame.tsx)
+    participant Engine as Phaser Engine (Phaser.Game)
+    participant Scene as Phaser Scene (DetectiveOffice.ts)
+
+    React->>Game: Mounts container ref and passes ipRemaining / gameState
+    Game->>Engine: Instantiates Phaser Game config on DOM ref
+    Engine->>Scene: Triggers boot & boots scene scenes
+    React->>Game: React state updates (Category unlocked / IP spent)
+    Game->>Scene: Invokes scene.updateIP(ip) and scene.init(data)
+    Scene->>Scene: Dynamically redraws Polaroids, checkmarks, & plays audio synth
+```
+
+### B. Phaser Scene Operations
+- **`LauncherScene.ts`:** Animates the introductory CrimeGuess cinematic typewriter text, retro CRT flickering scanlines, and triggers the animated dashboard begin button.
+- **`DetectiveOffice.ts`:** Renders the interactive detective office desk containing Polaroids representing suspects, motives, methods, and twists. Intercepts card clicks to switch React sidebars, and draws checkmarks when categories are solved.
+- **`SolvedScene.ts`:** Animates the end-of-case manila folders and slams a crimson `CLOSED` ink stamp accompanied by sub-bass thud particles and synthesizer audio feedback.
+
+---
+
 ## 🔍 Smart Guess Engine & Hotness Meter
 
 To ensure a fast, self-contained, and highly responsive gameplay experience, CrimeGuess implements an offline guessing algorithm that maps inputs to semantic hotness levels:
