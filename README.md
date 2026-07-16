@@ -6,31 +6,18 @@ CrimeGuess brings the thrill of detective work directly to Reddit feeds. Players
 
 ---
 
-## 🚨 The Core Challenge & Our Engineering Solution
+## 🚨 The Game Design Challenge: Slow, Solo & Friction-Heavy Crime Games
 
-During development, we faced a major platform inconsistency: **the game worked flawlessly in desktop and mobile browsers, but failed to open in the Reddit Android Native Game Mode**, remaining embedded inside the inline feeds card.
+Traditional detective and mystery solving games on web or mobile platforms face two major friction points:
+1. **Too Solo & Disconnected:** Players solve cases completely in isolation. There is no natural community space to compare notes, discuss plot twists, or share bragging rights.
+2. **Too Time-Consuming:** Typical mystery games require installing heavy applications, reading pages of slow-loading dialogue, or waiting minutes for LLM/AI response generation. It takes too much time to get to the "Aha!" moment.
 
-### 1. The Root Cause
-Reddit’s mobile container handles the transition into the full-screen Native Game Player by intercepting `requestExpandedMode('game')`. 
-However:
-- The initial design pointed both the `default` (inline feed card preview) and `game` (expanded playable view) Devvit entrypoints to the same HTML file (`index.html`).
-- The Reddit Android App WebView intercepted the transition, detected that the target file matched the current active preview file, and aborted the request as a duplicate no-op.
+### Our Solution: The Decentralized, Bite-Sized Community Game
+CrimeGuess solves these friction points through three innovative design choices:
 
-### 2. The Solution
-We re-engineered the client architecture to implement a **split-entrypoint asset structure**:
-- **Lightweight Feed Splash:** Created a zero-dependency [splash.html](file:///Users/hritesh/Desktop/detective-daily/src/client/splash.html) and [splash.ts](file:///Users/hritesh/Desktop/detective-daily/src/client/splash.ts) file. It contains only static launcher statistics and forwards raw pointer gestures to `requestExpandedMode(e, 'game')`.
-- **Multi-Entrypoint Vite Bundling:** Configured `vite.config.ts` to bundle two distinct asset targets.
-- **Entrypoint Config Alignment:** Statically mapped the distinct entrypoints in `devvit.json`:
-  ```json
-  "default": {
-    "entry": "splash.html",
-    "inline": true
-  },
-  "game": {
-    "entry": "index.html"
-  }
-  ```
-- **Result:** Tapping "Enter Headquarters" triggers a distinct file transition from `splash.html` to `index.html`, correctly signaling the Reddit Android App to launch into full-screen **Native Game Player Mode**!
+- **Bite-Sized (5-10 Minute) Cases:** Cases are built using a compact 4-category puzzle layout (Suspect, Motive, Method, Twist). Players unlock clues using their starting Investigation Points (IP) and make rapid deductions.
+- **Fast, Deterministic Hotness Engine:** Instead of heavy, slow LLM calls, CrimeGuess implements a local semantic-matching console. It resolves guesses instantly, returning hotness thermometer signals and smart clues in milliseconds.
+- **Decentralized Post Architecture (Social Solving):** Headquarters acts as a lightweight launcher. Every individual case is published as its own independent Reddit post. This naturally moves player discussion, theories, and score sharing directly into the post's Reddit comment thread—turning solo deduction into a shared, social, and viral community event.
 
 ---
 
