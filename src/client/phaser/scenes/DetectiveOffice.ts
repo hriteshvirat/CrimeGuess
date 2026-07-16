@@ -49,6 +49,18 @@ export default class DetectiveOffice extends Phaser.Scene {
   public preload(): void {
     // Scaffold dynamic asset textures
     AssetHelper.createAllTextures(this);
+    this.load.audio('ui_click', 'audio/ui_click.wav');
+    this.load.audio('hover_tick', 'audio/hover_tick.wav');
+    this.load.audio('dossier_open', 'audio/dossier_open.wav');
+    this.load.audio('forensics_open', 'audio/forensics_open.wav');
+    this.load.audio('latch_unlock', 'audio/latch_unlock.wav');
+    this.load.audio('wrong_guess', 'audio/wrong_guess.wav');
+    this.load.audio('warm_ping', 'audio/warm_ping.wav');
+    this.load.audio('hot_ping', 'audio/hot_ping.wav');
+    this.load.audio('correct_ping', 'audio/correct_ping.wav');
+    this.load.audio('lock_open', 'audio/lock_open.wav');
+    this.load.audio('case_solved', 'audio/case_solved.wav');
+    this.load.audio('rain_loop', 'audio/rain_loop.wav');
   }
 
   public create(): void {
@@ -130,6 +142,7 @@ export default class DetectiveOffice extends Phaser.Scene {
     notebook.setInteractive();
     this.addHoverGlow(notebook, 'Open Deduction Notes (Focus guess console)');
     notebook.on('pointerdown', () => {
+      this.sound.play('ui_click', { volume: 0.8 });
       // Focus Guess console event dispatch to React
       window.dispatchEvent(new CustomEvent('PHASER_FOCUS_GUESS'));
     });
@@ -139,6 +152,7 @@ export default class DetectiveOffice extends Phaser.Scene {
     caseFolder.setInteractive();
     this.addHoverGlow(caseFolder, 'Open Lab Case Files (Go to Forensics)');
     caseFolder.on('pointerdown', () => {
+      this.sound.play('ui_click', { volume: 0.8 });
       window.dispatchEvent(new CustomEvent('PHASER_NAV_TAB', { detail: 'forensics' }));
     });
 
@@ -183,6 +197,39 @@ export default class DetectiveOffice extends Phaser.Scene {
       fontSize: '9px',
       color: '#8e9cae'
     }).setOrigin(1, 0);
+
+    // Play quiet rain loop
+    const rain = this.sound.add('rain_loop', { volume: 0.15, loop: true });
+    rain.play();
+
+    // Play sound helper event listener
+    const playSoundHandler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const soundName = customEvent.detail?.name;
+      if (soundName && this.sound) {
+        const soundManager = this.sound as any;
+        if (soundManager.context && soundManager.context.state === 'suspended') {
+          soundManager.context.resume().catch((err: any) => {
+            console.warn('Failed to resume AudioContext:', err);
+          });
+        }
+        if (soundManager.unlock) {
+          try {
+            soundManager.unlock();
+          } catch (unlockErr) {}
+        }
+        try {
+          this.sound.play(soundName, { volume: customEvent.detail?.volume ?? 0.8 });
+        } catch (playErr) {
+          console.error(`Failed to play sound ${soundName}:`, playErr);
+        }
+      }
+    };
+    window.addEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+    this.events.on('shutdown', () => {
+      window.removeEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+      this.sound.stopAll();
+    });
   }
 
   public update(time: number): void {
@@ -243,6 +290,7 @@ export default class DetectiveOffice extends Phaser.Scene {
     let descText: Phaser.GameObjects.Text | null = null;
 
     item.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      this.sound.play('hover_tick', { volume: 0.6 });
       glowBox = this.add.graphics();
       glowBox.lineStyle(2, 0x00f0ff, 0.7);
       glowBox.strokeRect(item.x - (item.width / 2) - 4, item.y - (item.height / 2) - 4, item.width + 8, item.height + 8);

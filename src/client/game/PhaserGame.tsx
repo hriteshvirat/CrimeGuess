@@ -45,7 +45,11 @@ export default function PhaserGame({
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
-      scene: [launcherScene, officeScene, solvedScene]
+      scene: isLauncher 
+        ? [launcherScene, officeScene, solvedScene] 
+        : (gameState.completed && solvedSummary 
+            ? [solvedScene, launcherScene, officeScene] 
+            : [officeScene, launcherScene, solvedScene])
     };
 
     const game = new Phaser.Game(config);

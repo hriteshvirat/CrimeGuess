@@ -4,6 +4,7 @@ export default class SolvedScene extends Phaser.Scene {
   private solvedData: any;
   private score: number;
   private audioCtx!: AudioContext | null;
+  private typewriterSound?: Phaser.Sound.BaseSound;
 
   constructor() {
     super('SolvedScene');
@@ -21,6 +22,22 @@ export default class SolvedScene extends Phaser.Scene {
     } catch (e) {
       this.audioCtx = null;
     }
+  }
+
+  public preload(): void {
+    this.load.audio('dossier_open', 'audio/dossier_open.wav');
+    this.load.audio('typewriter_loop', 'audio/typewriter_loop.wav');
+    this.load.audio('typewriter_bell', 'audio/typewriter_bell.wav');
+    this.load.audio('lock_open', 'audio/lock_open.wav');
+    this.load.audio('ui_click', 'audio/ui_click.wav');
+    this.load.audio('hover_tick', 'audio/hover_tick.wav');
+    this.load.audio('forensics_open', 'audio/forensics_open.wav');
+    this.load.audio('latch_unlock', 'audio/latch_unlock.wav');
+    this.load.audio('wrong_guess', 'audio/wrong_guess.wav');
+    this.load.audio('warm_ping', 'audio/warm_ping.wav');
+    this.load.audio('hot_ping', 'audio/hot_ping.wav');
+    this.load.audio('correct_ping', 'audio/correct_ping.wav');
+    this.load.audio('case_solved', 'audio/case_solved.wav');
   }
 
   public create(): void {
@@ -75,10 +92,38 @@ export default class SolvedScene extends Phaser.Scene {
       },
       onComplete: () => {
         // Start typing Case details
-        this.playAudioBeep(600, 'sine', 0.15); // Opening chime
-        this.time.delayedCall(150, () => this.playAudioBeep(800, 'sine', 0.15));
-        this.startTypewriterSummary();
+        this.sound.play('dossier_open', { volume: 0.8 });
+        this.time.delayedCall(400, () => this.startTypewriterSummary());
       }
+    });
+
+    // Play sound helper event listener
+    const playSoundHandler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const soundName = customEvent.detail?.name;
+      if (soundName && this.sound) {
+        const soundManager = this.sound as any;
+        if (soundManager.context && soundManager.context.state === 'suspended') {
+          soundManager.context.resume().catch((err: any) => {
+            console.warn('Failed to resume AudioContext:', err);
+          });
+        }
+        if (soundManager.unlock) {
+          try {
+            soundManager.unlock();
+          } catch (unlockErr) {}
+        }
+        try {
+          this.sound.play(soundName, { volume: customEvent.detail?.volume ?? 0.8 });
+        } catch (playErr) {
+          console.error(`Failed to play sound ${soundName}:`, playErr);
+        }
+      }
+    };
+    window.addEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+    this.events.on('shutdown', () => {
+      window.removeEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+      this.sound.stopAll();
     });
   }
 
@@ -113,6 +158,12 @@ export default class SolvedScene extends Phaser.Scene {
       callback: () => {
         if (currentLineIndex < textLines.length) {
           const currentTargetLine = textLines[currentLineIndex];
+          if (charIndex === 0) {
+            if (!this.typewriterSound || !this.typewriterSound.isPlaying) {
+              this.typewriterSound = this.sound.add('typewriter_loop', { volume: 0.5, loop: true });
+              this.typewriterSound.play();
+            }
+          }
           if (charIndex < currentTargetLine.length) {
             fullOutputText += currentTargetLine[charIndex];
             detailText.setText(fullOutputText);
@@ -120,6 +171,10 @@ export default class SolvedScene extends Phaser.Scene {
             // Play typewriter keystroke click sound
             this.playAudioBeep(1200 + Math.random() * 200, 'triangle', 0.02);
           } else {
+            if (this.typewriterSound) {
+              this.typewriterSound.stop();
+            }
+            this.sound.play('typewriter_bell', { volume: 0.6 });
             fullOutputText += '\n';
             detailText.setText(fullOutputText);
             currentLineIndex++;
@@ -127,6 +182,9 @@ export default class SolvedScene extends Phaser.Scene {
           }
         } else {
           typeEvent.destroy();
+          if (this.typewriterSound) {
+            this.typewriterSound.stop();
+          }
           // Tick up the score numbers
           this.animateScoreTick(detailText, fullOutputText);
         }
@@ -183,7 +241,8 @@ export default class SolvedScene extends Phaser.Scene {
     stamp.setScale(3.5);
     stamp.setAlpha(0);
 
-    // Heavy bass explosion thud sound
+    // Heavy bass explosion thud sound + mechanical lock
+    this.sound.play('lock_open', { volume: 0.8 });
     this.playBassThud();
 
     this.tweens.add({

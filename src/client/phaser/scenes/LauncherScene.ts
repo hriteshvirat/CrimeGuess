@@ -21,7 +21,12 @@ export default class LauncherScene extends Phaser.Scene {
   private beginButton!: Phaser.GameObjects.Container;
   private soundText!: Phaser.GameObjects.Text;
 
-  private skipIntro: boolean = false;
+  private skipIntro: boolean = true;
+
+  private ambientRoomSound?: Phaser.Sound.BaseSound;
+  private rainSound?: Phaser.Sound.BaseSound;
+  private lampHumSound?: Phaser.Sound.BaseSound;
+  private typewriterSound?: Phaser.Sound.BaseSound;
 
   public drawerOpenAmount: number = 0;
 
@@ -30,13 +35,34 @@ export default class LauncherScene extends Phaser.Scene {
   }
 
   public init(data?: { skipIntro?: boolean }): void {
-    if (data && data.skipIntro) {
-      this.skipIntro = true;
+    if (data && data.skipIntro !== undefined) {
+      this.skipIntro = data.skipIntro;
     }
   }
 
   public preload(): void {
     AssetHelper.createAllTextures(this);
+    this.load.audio('ambient_room', 'audio/ambient_room.wav');
+    this.load.audio('door_open', 'audio/door_open.wav');
+    this.load.audio('rain_loop', 'audio/rain_loop.wav');
+    this.load.audio('lamp_switch', 'audio/lamp_switch.wav');
+    this.load.audio('lamp_hum', 'audio/lamp_hum.wav');
+    this.load.audio('computer_boot', 'audio/computer_boot.wav');
+    this.load.audio('typewriter_loop', 'audio/typewriter_loop.wav');
+    this.load.audio('typewriter_bell', 'audio/typewriter_bell.wav');
+    this.load.audio('begin_chime', 'audio/begin_chime.wav');
+    this.load.audio('button_click', 'audio/button_click.wav');
+    this.load.audio('dossier_open', 'audio/dossier_open.wav');
+    this.load.audio('forensics_open', 'audio/forensics_open.wav');
+    this.load.audio('latch_unlock', 'audio/latch_unlock.wav');
+    this.load.audio('wrong_guess', 'audio/wrong_guess.wav');
+    this.load.audio('warm_ping', 'audio/warm_ping.wav');
+    this.load.audio('hot_ping', 'audio/hot_ping.wav');
+    this.load.audio('correct_ping', 'audio/correct_ping.wav');
+    this.load.audio('lock_open', 'audio/lock_open.wav');
+    this.load.audio('case_solved', 'audio/case_solved.wav');
+    this.load.audio('ui_click', 'audio/ui_click.wav');
+    this.load.audio('hover_tick', 'audio/hover_tick.wav');
   }
 
   public create(): void {
@@ -126,6 +152,8 @@ export default class LauncherScene extends Phaser.Scene {
       this.cameras.main.resetFX();
     } else {
       // Start cinematic sequence
+      this.ambientRoomSound = this.sound.add('ambient_room', { volume: 0.8, loop: true });
+      this.ambientRoomSound.play();
       this.time.delayedCall(800, () => this.playDoorOpen());
     }
 
@@ -134,6 +162,7 @@ export default class LauncherScene extends Phaser.Scene {
     // Event listener for opening filing cabinet
     window.addEventListener('PHASER_CABINET_DRAWER_OPEN', () => {
       this.soundText.setText('* DRAWER SLIDES OPEN *');
+      this.sound.play('forensics_open', { volume: 0.7 });
       this.tweens.add({
         targets: this,
         drawerOpenAmount: 30,
@@ -147,6 +176,7 @@ export default class LauncherScene extends Phaser.Scene {
     // Event listener for sliding case files folder to desk
     window.addEventListener('PHASER_FOLDER_SLIDE_DESK', () => {
       this.soundText.setText('* FOLDER SLIDES ONTO DESK *');
+      this.sound.play('forensics_open', { volume: 0.7 });
       const tempFolder = this.add.sprite(545, 110, 'case_folder').setScale(0.3);
       this.tweens.add({
         targets: tempFolder,
@@ -158,12 +188,42 @@ export default class LauncherScene extends Phaser.Scene {
         ease: 'Quad.easeInOut',
         onComplete: () => {
           this.soundText.setText('* FOLDER OPENS *');
+          this.sound.play('dossier_open', { volume: 0.7 });
           this.cameras.main.zoomTo(1.2, 500, 'Quad.easeInOut', true);
           this.time.delayedCall(500, () => {
             tempFolder.destroy();
           });
         }
       });
+    });
+
+    // Play sound helper event listener
+    const playSoundHandler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const soundName = customEvent.detail?.name;
+      if (soundName && this.sound) {
+        const soundManager = this.sound as any;
+        if (soundManager.context && soundManager.context.state === 'suspended') {
+          soundManager.context.resume().catch((err: any) => {
+            console.warn('Failed to resume AudioContext:', err);
+          });
+        }
+        if (soundManager.unlock) {
+          try {
+            soundManager.unlock();
+          } catch (unlockErr) {}
+        }
+        try {
+          this.sound.play(soundName, { volume: customEvent.detail?.volume ?? 0.8 });
+        } catch (playErr) {
+          console.error(`Failed to play sound ${soundName}:`, playErr);
+        }
+      }
+    };
+    window.addEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+    this.events.on('shutdown', () => {
+      window.removeEventListener('PHASER_PLAY_SOUND', playSoundHandler);
+      this.sound.stopAll();
     });
   }
 
@@ -236,6 +296,7 @@ export default class LauncherScene extends Phaser.Scene {
   private playDoorOpen(): void {
     this.introStep = 1;
     this.soundText.setText('* DOOR OPENS *');
+    this.sound.play('door_open', { volume: 0.8 });
 
     // Create a tween that animates the width of the door light
     const lightWidth = { val: 0 };
@@ -269,6 +330,13 @@ export default class LauncherScene extends Phaser.Scene {
 
     // Turn on lamp
     this.lampOn = true;
+    this.sound.play('lamp_switch', { volume: 0.8 });
+    this.lampHumSound = this.sound.add('lamp_hum', { volume: 0.5, loop: true });
+    this.lampHumSound.play();
+
+    this.rainSound = this.sound.add('rain_loop', { volume: 0.5, loop: true });
+    this.rainSound.play();
+
     this.tweens.add({
       targets: this,
       lampIntensity: 1,
@@ -290,6 +358,7 @@ export default class LauncherScene extends Phaser.Scene {
   private playCRTBoot(): void {
     this.introStep = 3;
     this.soundText.setText('* CRT MONITOR BOOTS *');
+    this.sound.play('computer_boot', { volume: 0.8 });
     this.crtBooted = true;
 
     // CRT monitor startup flash
@@ -313,6 +382,9 @@ export default class LauncherScene extends Phaser.Scene {
     const fullText = "GOOD EVENING, DETECTIVE.\nOne new case has arrived.";
     let currentIndex = 0;
 
+    this.typewriterSound = this.sound.add('typewriter_loop', { volume: 0.7, loop: true });
+    this.typewriterSound.play();
+
     this.time.addEvent({
       delay: 70,
       callback: () => {
@@ -322,6 +394,10 @@ export default class LauncherScene extends Phaser.Scene {
 
         if (currentIndex >= fullText.length) {
           this.soundText.setText('');
+          if (this.typewriterSound) {
+            this.typewriterSound.stop();
+          }
+          this.sound.play('typewriter_bell', { volume: 0.8 });
           this.time.delayedCall(500, () => this.showBeginButton());
         }
       },
@@ -335,6 +411,8 @@ export default class LauncherScene extends Phaser.Scene {
     const { width } = this.scale;
     const bx = width / 2;
     const by = 282;
+
+    this.sound.play('begin_chime', { volume: 0.8 });
 
     // Container for styling
     this.beginButton = this.add.container(bx, by);
@@ -386,6 +464,25 @@ export default class LauncherScene extends Phaser.Scene {
   private handleBeginClick(): void {
     // Zoom and Fade Out cinematic transition
     this.soundText.setText('* SWOOSH *');
+    this.sound.play('button_click', { volume: 0.8 });
+
+    if (this.rainSound) {
+      this.tweens.add({
+        targets: this.rainSound,
+        volume: 0,
+        duration: 500,
+        onComplete: () => {
+          if (this.rainSound) this.rainSound.stop();
+        }
+      });
+    }
+    if (this.ambientRoomSound) {
+      this.ambientRoomSound.stop();
+    }
+    if (this.lampHumSound) {
+      this.lampHumSound.stop();
+    }
+
     this.cameras.main.zoomTo(1.4, 700, 'Quad.easeInOut', true);
     this.cameras.main.fadeOut(700, 10, 11, 14);
 

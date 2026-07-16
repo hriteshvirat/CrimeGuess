@@ -25,6 +25,7 @@ import FilingCabinet from './components/FilingCabinet';
 import CaseEditor from './components/CaseEditor';
 import ModeratorReview from './components/ModeratorReview';
 import { executeMockRequest } from './utils/mockServer';
+import { audioHelper } from './utils/audioHelper';
 // @ts-ignore
 import { getWebViewMode, addWebViewModeListener, removeWebViewModeListener, requestExpandedMode } from '@devvit/client';
 
@@ -119,12 +120,47 @@ export default function App() {
     }
   }, []);
 
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (activeTab === 'clues') {
+      audioHelper.play('dossier_open');
+    } else if (activeTab === 'forensics') {
+      audioHelper.play('forensics_open');
+    } else {
+      audioHelper.play('ui_click');
+    }
+  }, [activeTab]);
+
   // Launcher state
   const [isLauncher, setIsLauncher] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
   const [hqTab, setHqTab] = useState<'menu' | 'archives' | 'profile' | 'leaderboard' | 'settings' | 'submit_case' | 'community_files' | 'moderation'>('menu');
 
   const expandButtonRef = useRef<HTMLButtonElement>(null);
+
+  const isFirstHqRender = useRef(true);
+  useEffect(() => {
+    if (isFirstHqRender.current) {
+      isFirstHqRender.current = false;
+      return;
+    }
+    if (hqTab === 'archives' || hqTab === 'community_files') {
+      audioHelper.play('dossier_open');
+    } else {
+      audioHelper.play('ui_click');
+    }
+  }, [hqTab]);
+
+  useEffect(() => {
+    const isInteractiveUI = !isLauncher || !showIntro;
+    if (isInteractiveUI) {
+      audioHelper.initialize();
+    }
+  }, [isLauncher, showIntro]);
 
   useEffect(() => {
     if (viewMode !== 'inline') return;
@@ -414,28 +450,13 @@ export default function App() {
     }
   };
 
-  const playSolveSound = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
-      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
-      console.warn('AudioContext failed:', e);
-    }
-  };
+
 
   const handleGuessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guessInput.trim() || submittingGuess || !progress || progress.completed) return;
+
+    audioHelper.play('ui_click');
 
     try {
       setSubmittingGuess(true);
@@ -459,8 +480,19 @@ export default function App() {
       const categoryName = guess.closestCategory.toUpperCase();
 
       if (guess.status === 'Solved') {
-        playSolveSound();
+        audioHelper.play('lock_open');
+        setTimeout(() => {
+          audioHelper.play('correct_ping');
+        }, 150);
         showToast(`🎉 ${categoryName} solved successfully!`);
+      } else {
+        if (guess.status === 'Very Hot' || guess.status === 'Hot') {
+          audioHelper.play('hot_ping');
+        } else if (guess.status === 'Warm') {
+          audioHelper.play('warm_ping');
+        } else {
+          audioHelper.play('wrong_guess');
+        }
       }
 
       let hotnessPrefix = '❄️ Ice Cold';
@@ -486,6 +518,9 @@ export default function App() {
 
       if (res.progress.completed && res.solvedSummary) {
         setSolvedSummary(res.solvedSummary);
+        setTimeout(() => {
+          audioHelper.play('case_solved');
+        }, 800);
         showToast('🔓 CASE RESOLVED! Review dossier archives.');
       } else {
         const stateRes = await sendToHost<GameStateResponse>('GET_STATE', { date: activeDate });
@@ -523,6 +558,7 @@ export default function App() {
         };
       });
       showToast(`🔍 ${config.label} Unlocked!`);
+      audioHelper.play('latch_unlock');
     } catch (err: any) {
       showToast(err.message || 'Failed to complete lab search.');
     } finally {
@@ -552,6 +588,7 @@ Play and solve cases on CrimeGuess!`;
 
   const handleNavigateToCase = (metadata: LauncherCaseMetadata | null) => {
     if (!metadata) return;
+    audioHelper.play('ui_click');
     const isMockMode = typeof window !== 'undefined' && window.parent === window;
     if (isMockMode) {
       showToast(`[Mock Redirect] Navigating to: ${metadata.redditUrl}`);
