@@ -11,7 +11,7 @@ CrimeGuess is the ultimate interactive mystery deduction game built natively on 
 ## 🎥 Demo
 
 *   **Video Demo:** [Watch the Gameplay Walkthrough](https://youtu.be/0NxoaS-FgFw?si=l65ie2t2ccl7VHgj)
-*   **Live Reddit Experience:** [Play on r/crime_guess_dev](https://www.reddit.com/r/crime_guess_dev/?playtest=crime-guess)
+*   **Live Reddit Experience:** [Play on r/crime_guess_dev](https://www.reddit.com/r/crime_guess_dev/)
 *   **Devpost Submission:** [View our Devpost Portfolio](https://devpost.com/software/crimeguess)
 
 ---
