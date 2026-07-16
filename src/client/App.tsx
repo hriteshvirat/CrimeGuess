@@ -27,7 +27,7 @@ import ModeratorReview from './components/ModeratorReview';
 import { executeMockRequest } from './utils/mockServer';
 import { audioHelper } from './utils/audioHelper';
 // @ts-ignore
-import { getWebViewMode, addWebViewModeListener, removeWebViewModeListener, requestExpandedMode } from '@devvit/client';
+import { getWebViewMode, addWebViewModeListener, removeWebViewModeListener, requestExpandedMode, navigateTo } from '@devvit/client';
 
 const pendingRequests = new Map<
   string,
@@ -55,7 +55,7 @@ if (typeof window !== 'undefined') {
 }
 
 async function sendToHost<T>(type: string, payload?: any): Promise<T> {
-  const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
+  const isMockMode = !!(import.meta as any).env?.DEV;
   if (isMockMode) {
     return executeMockRequest<T>(type, payload);
   }
@@ -90,13 +90,13 @@ export function relayLog(msg: string) {
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('office');
-  const [activeDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [activeDate, setActiveDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   const [viewMode, setViewMode] = useState<'inline' | 'expanded'>(() => {
     try {
       const mode = getWebViewMode();
       // Default to expanded for local mock mode
-      const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
+      const isMockMode = !!(import.meta as any).env?.DEV;
       if (isMockMode) return 'expanded';
       return mode || 'inline';
     } catch (e) {
@@ -224,8 +224,8 @@ export default function App() {
 
   // Initial load
   useEffect(() => {
-    loadGameState(activeDate);
-  }, [activeDate]);
+    loadGameState();
+  }, []);
 
   // Event bindings
   useEffect(() => {
@@ -371,14 +371,17 @@ export default function App() {
     setTimeout(() => setToastText(null), 4000);
   };
 
-  const loadGameState = async (dateStr: string) => {
+  const loadGameState = async (dateStr?: string) => {
     try {
       setLoading(true);
       setFeedbackMsg(null);
-      const res = await sendToHost<GameStateResponse>('GET_STATE', { date: dateStr });
+      const res = await sendToHost<GameStateResponse>('GET_STATE', dateStr ? { date: dateStr } : {});
       setMystery(res.mystery);
       setProgress(res.progress);
       setStats(res.stats);
+      if (res.mystery?.date) {
+        setActiveDate(res.mystery.date);
+      }
       
       const resolved = res.resolvedPostType || 'DAILY_CASE';
       setPostType(resolved);
@@ -589,25 +592,13 @@ Play and solve cases on CrimeGuess!`;
   const handleNavigateToCase = (metadata: LauncherCaseMetadata | null) => {
     if (!metadata) return;
     audioHelper.play('ui_click');
-    const isMockMode = typeof window !== 'undefined' && window.parent === window && !window.location.search.includes('platform=');
+    const isMockMode = !!(import.meta as any).env?.DEV;
     if (isMockMode) {
       showToast(`[Mock Redirect] Navigating to: ${metadata.redditUrl}`);
       window.open(metadata.redditUrl, '_blank');
     } else {
       try {
-        const normalizedUrl = new URL(metadata.redditUrl).toString();
-        window.parent.postMessage({
-          type: 'devvit-internal',
-          scope: 1, // CLIENT
-          navigateToUrl: {
-            url: normalizedUrl,
-          },
-          effect: {
-            navigateToUrl: {
-              url: normalizedUrl,
-            }
-          }
-        }, '*');
+        navigateTo(metadata.redditUrl);
       } catch (err) {
         window.open(metadata.redditUrl, '_blank');
       }
